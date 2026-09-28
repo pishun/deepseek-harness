@@ -71,6 +71,9 @@ export function createElectronBuilderConfig(
   let windowsCode = []
   const unpack = ['**/*.{node,dylib,dll,so,exe}', '**/*.so.*', '**/spawn-helper', '**/@vscode/ripgrep-*/bin/rg',
     `**/node_modules/@deepseek-ai/libreoffice-kit-${resolvedPlatform}-${resolvedArch}/**/*`]
+  // Electron-builder's default entitlements carry the JIT keys only; Hardened Runtime denies
+  // microphone capture to an application that omits the audio-input entitlement.
+  const macAppEntitlements = fileURLToPath(new URL('./app-entitlements.plist', import.meta.url))
   const windowsSigner = packagesWindows && !unsigned
     ? createWindowsTokenSigner({
         certificateFile: env.DSH_DESKTOP_WINDOWS_CER_FILE,
@@ -150,12 +153,16 @@ export function createElectronBuilderConfig(
     mac: {
       icon: fileURLToPath(new URL('../resources/icon-macos.png', import.meta.url)),
       category: 'public.app-category.developer-tools',
-      // macOS matches the application locale against this bundle, not Electron Framework resources.
-      extendInfo: { CFBundleLocalizations: ['en', 'zh_CN'] },
       identity: macOSSigning?.signingIdentity,
       forceCodeSigning: true,
       hardenedRuntime: true,
-      extendInfo: { NSMicrophoneUsageDescription: 'DeepSeek Harness uses your microphone to transcribe speech into message drafts.' },
+      entitlements: macAppEntitlements,
+      entitlementsInherit: macAppEntitlements,
+      extendInfo: {
+        // macOS matches the application locale against this bundle, not Electron Framework resources.
+        CFBundleLocalizations: ['en', 'zh_CN'],
+        NSMicrophoneUsageDescription: 'DeepSeek Harness uses your microphone to transcribe speech into message drafts.',
+      },
       // ASAR-unpacked native runtime files are pre-signed; PAK resources are sealed by their enclosing bundle.
       signIgnore: ['/Contents/Resources/app\\.asar\\.unpacked/dsh(?:/|$)', '/Contents/Resources/runtime/primary-runtime(?:/|$)', '\\.pak$'],
       notarize: true,

@@ -14,6 +14,7 @@ const appPath = '/private build/DeepSeek Harness.app'
 const commands = [
   ['/usr/bin/codesign', ['--verify', '--deep', '--strict', '--verbose=2', appPath]],
   ['/usr/bin/codesign', ['--display', '--verbose=4', appPath]],
+  ['/usr/bin/codesign', ['--display', '--entitlements', ':-', appPath]],
   ['/usr/bin/xcrun', ['stapler', 'validate', appPath]],
   ['/usr/sbin/spctl', ['--assess', '--type', 'execute', '--verbose=4', appPath]],
 ] as const
@@ -21,13 +22,13 @@ const commands = [
 afterEach(() => { vi.resetAllMocks() })
 
 describe('notarized application qualification', () => {
-  it.each([undefined, 0, 1, 2, 3])('stops at failed command %s or verifies every qualification', (failedCommand) => {
+  it.each([undefined, 0, 1, 2, 3, 4])('stops at failed command %s or verifies every qualification', (failedCommand) => {
     let index = 0
     vi.mocked(spawnSync).mockImplementation(() => ({
       pid: 1,
       output: [],
       stdout: '',
-      stderr: `Authority=Developer ID Application: ${expected.signingIdentity}\nTeamIdentifier=${expected.teamId}\n`,
+      stderr: `Authority=Developer ID Application: ${expected.signingIdentity}\nTeamIdentifier=${expected.teamId}\n<key>com.apple.security.device.audio-input</key>\n`,
       status: index++ === failedCommand ? 1 : 0,
       signal: null,
     }))
@@ -41,5 +42,18 @@ describe('notarized application qualification', () => {
     for (const [index, [command, args]] of calledCommands.entries()) {
       expect(spawnSync).toHaveBeenNthCalledWith(index + 1, command, args, { encoding: 'utf8' })
     }
+  })
+
+  it('rejects an application whose signature omits the microphone entitlement', () => {
+    vi.mocked(spawnSync).mockImplementation(() => ({
+      pid: 1,
+      output: [],
+      stdout: '',
+      stderr: `Authority=Developer ID Application: ${expected.signingIdentity}\nTeamIdentifier=${expected.teamId}\n`,
+      status: 0,
+      signal: null,
+    }))
+    expect(() => { verifyMacOSNotarizedApplication(appPath, expected) })
+      .toThrow(/com\.apple\.security\.device\.audio-input/u)
   })
 })

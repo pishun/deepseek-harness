@@ -38,6 +38,20 @@ export function assertMacOSRuntimeSignatureDetails(details, expected) {
   }
 }
 
+/** Hardened Runtime denies audio input to a signed application that does not declare this entitlement. */
+const MICROPHONE_ENTITLEMENT = 'com.apple.security.device.audio-input'
+
+/**
+ * Reject a signed application whose entitlements omit microphone capture.
+ * @param {string} entitlements - Output from `codesign --display --entitlements`.
+ * @returns {void}
+ */
+export function assertMacOSMicrophoneEntitlement(entitlements) {
+  if (!entitlements.includes(MICROPHONE_ENTITLEMENT)) {
+    throw new Error(`desktop macOS signing: entitlements omit ${MICROPHONE_ENTITLEMENT}, so macOS denies microphone capture`)
+  }
+}
+
 /**
  * Execute one Apple release tool and return its diagnostic streams.
  * @param {string} command - Absolute executable path.
@@ -142,7 +156,7 @@ export function verifyMacOSRuntimeCode(path, expected) {
 }
 
 /**
- * Verify the full application signature and its release owner.
+ * Verify the full application signature, its release owner, and its microphone entitlement.
  * @param {string} appPath - Path to the packaged `.app` directory.
  * @param {{ signingIdentity: string, teamId: string }} expected - Public release identity.
  * @returns {void}
@@ -151,6 +165,7 @@ export function verifyMacOSSignature(appPath, expected) {
   runCodeSign(['--verify', '--deep', '--strict', '--verbose=2', appPath])
   const details = runCodeSign(['--display', '--verbose=4', appPath])
   assertMacOSSignatureDetails(details, expected)
+  assertMacOSMicrophoneEntitlement(runCodeSign(['--display', '--entitlements', ':-', appPath]))
 }
 
 /**

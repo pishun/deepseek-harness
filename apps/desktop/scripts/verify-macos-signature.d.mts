@@ -15,6 +15,12 @@ export function assertMacOSSignatureDetails(details: string, expected: MacOSSign
 export function assertMacOSRuntimeSignatureDetails(details: string, expected: MacOSSigningEnvironment): void
 
 /**
+ * Reject a signed application whose entitlements omit microphone capture.
+ * @param entitlements - Output from `codesign --display --entitlements`.
+ */
+export function assertMacOSMicrophoneEntitlement(entitlements: string): void
+
+/**
  * Sign one Mach-O file using the packaging-owned CSC_KEYCHAIN; missing setup rejects before signing.
  * @param path - Writable standalone Mach-O file.
  * @param identifier - Stable code-signing identifier derived from the release app ID and CAS digest.
@@ -37,7 +43,7 @@ export function signMacOSRuntimeCode(
 export function verifyMacOSRuntimeCode(path: string, expected: MacOSSigningEnvironment): void
 
 /**
- * Verify the full application signature and its release owner.
+ * Verify the full application signature, its release owner, and its microphone entitlement.
  * @param appPath - Path to the packaged `.app` directory.
  * @param expected - Public release identity.
  */

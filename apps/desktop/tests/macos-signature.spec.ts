@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { NotarizeOptions } from '@electron/notarize'
 import {
@@ -7,6 +8,7 @@ import {
 } from '../scripts/desktop-release-environment.mjs'
 import { notarizeMacOSDiskImageArtifact } from '../scripts/notarize-macos-disk-images.mjs'
 import {
+  assertMacOSMicrophoneEntitlement,
   assertMacOSRuntimeSignatureDetails,
   assertMacOSSignatureDetails,
 } from '../scripts/verify-macos-signature.mjs'
@@ -44,6 +46,7 @@ describe('desktop macOS release signature', () => {
     expect(config.protocols).toEqual([{ name: 'DeepSeek Harness', schemes: ['dsh'] }])
     expect(portablePath(config.directories.output)).toContain('/.desktop-build/targets/mac-arm64/artifacts')
     expect(config.mac.extendInfo.NSMicrophoneUsageDescription).toContain('microphone')
+    expect(config.mac.extendInfo.CFBundleLocalizations).toEqual(['en', 'zh_CN'])
     expect(config.extraResources).toHaveLength(2)
     expect(config.extraResources[0]?.to).toBe('runtime')
     expect(portablePath(config.extraResources[0]?.from ?? '')).toContain('/.desktop-build/targets/mac-arm64/runtime')
@@ -78,6 +81,19 @@ describe('desktop macOS release signature', () => {
       }],
     })
     expect(typeof config.artifactBuildCompleted).toBe('function')
+  })
+
+  it('signs the macOS application and its helpers with the hardened-runtime microphone entitlement', async () => {
+    const { createElectronBuilderConfig } = await import('../electron-builder.config.mjs')
+    const config = createElectronBuilderConfig(RELEASE_ENVIRONMENT, 'darwin', 'arm64')
+    expect(config.mac.entitlementsInherit).toBe(config.mac.entitlements)
+    const entitlements = readFileSync(config.mac.entitlements, 'utf8')
+    for (const key of [
+      'com.apple.security.cs.allow-jit',
+      'com.apple.security.cs.allow-unsigned-executable-memory',
+      'com.apple.security.cs.disable-library-validation',
+      'com.apple.security.device.audio-input',
+    ]) expect(entitlements).toContain(`<key>${key}</key>`)
   })
 
   it('seals PAK resources with their enclosing bundle while signing executable code', async () => {
@@ -138,6 +154,15 @@ describe('desktop macOS release signature', () => {
         `TeamIdentifier=${expected.teamId}`,
       ].join('\n'), expected)
     }).not.toThrow()
+  })
+
+  it('requires the signed application to declare microphone access', () => {
+    expect(() => {
+      assertMacOSMicrophoneEntitlement('<key>com.apple.security.device.audio-input</key>')
+    }).not.toThrow()
+    expect(() => {
+      assertMacOSMicrophoneEntitlement('<key>com.apple.security.cs.allow-jit</key>')
+    }).toThrow(/com\.apple\.security\.device\.audio-input/u)
   })
 
   it('requires a secure timestamp and hardened runtime for runtime code', () => {
